@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bar Chart</title>
+    <link rel="stylesheet" type="text/css" href="./css/index.css" />
+    <script src="https://d3js.org/d3.v5.min.js" charset="utf-8"></script>
+    <script
+      type="text/javascript"
+      src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"
+      defer
+    ></script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root">
+      <div class="container" id="title-container">
+        <h1 id="title">Doping in Professional Bicycle Racing</h1>
+      </div>
+      <div class="container" id="graph-container"></div>
+    </div>
+    <script type="text/javascript">
+      let vDataset = {};
+      const cWSvg = 1000,
+        cHSvg = 500,
+        cPaddingLeft = 120,
+        cWBar = cWSvg / 300,
+        cPaddingBottom = 50;
+
+      const graph = d3
+        .select("#graph-container")
+        .append("svg")
+        .attr("width", cWSvg + cPaddingLeft + 40)
+        .attr("height", cHSvg + cPaddingBottom + 40)
+        .attr("id", "graph");
+
+      fetch(
+        "https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/cyclist-data.json"
+      )
+        .then((response) => response.json())
+        .then((data) => {
+          vDataset = data;
+        })
+        .then(() => {
+          //data processing
+          let vTime = [],
+            vYear = [];
+          vDataset.forEach((item, index) => {
+            let date = new Date(item.Year.toString() + "-01-01");
+            let temp = new Date("2000-01-01");
+            vYear.push(new Date(date.setHours(0, 0, 0)));
+            vTime.push(
+              new Date(
+                temp.setHours(
+                  0,
+                  item.Time.split(":")[0],
+                  item.Time.split(":")[1]
+                )
+              )
+            );
+          });
+
+          //axis handle
+          xMax = new Date(d3.max(vYear));
+          xMax.setYear(xMax.getFullYear() + 1);
+          xMin = new Date(d3.min(vYear));
+          xMin.setYear(xMin.getFullYear() - 1);
+          const xScale = d3.scaleTime().domain([xMin, xMax]).range([0, cWSvg]);
+          const xAxis = d3.axisBottom().scale(xScale);
+          graph
+            .append("g")
+            .call(xAxis.tickFormat(d3.timeFormat("%Y")).ticks())
+            .attr("id", "x-axis")
+            .attr(
+              "transform",
+              `translate(${cPaddingLeft},${cHSvg + cPaddingBottom})`
+            );
+
+          yMax = new Date(d3.max(vTime));
+          yMin = new Date(d3.min(vTime));
+          const yScale = d3.scaleTime().domain([yMin, yMax]).range([0, cHSvg]);
+          const yAxis = d3.axisLeft(yScale);
+
+          graph
+            .append("g")
+            .call(yAxis.tickFormat(d3.timeFormat("%M:%S")))
+            .attr("id", "y-axis")
+            .attr("transform", `translate(${cPaddingLeft},${cPaddingBottom})`);
+
+          const cDataLegend = [
+            "No doping allegations",
+            "Riders with doping allegations",
+          ];
+
+          //legend handle
+          let legend = graph
+            .append("g")
+            .attr("id", "legend")
+            .selectAll("g")
+            .data(cDataLegend)
+            .enter()
+            .append("g")
+            .attr("class", "legend-container");
+          legend
+            .append("rect")
+            .attr("id", "legend-color")
+            .attr("width", 10)
+            .attr("height", 10)
+            .attr("x", cWSvg + cPaddingLeft)
+            .attr("y", (d, i) => i * 20 + 190)
+            .attr("fill", (d, i) => {
+              return i == 0 ? "brown" : "rgb(123, 123, 223)";
+            });
+          legend
+            .append("text")
+            .attr("id", "legend-text")
+            .attr("x", cWSvg + cPaddingLeft - 10)
+            .attr("y", (d, i) => i * 20 + 200)
+            .text((d) => d)
+            .attr("text-anchor", "end");
+
+          //plot and tooltip handle
+          let tooltip = d3.select("body").append("div").attr("id", "tooltip");
+          graph
+            .selectAll("circle")
+            .data(vTime)
+            .enter()
+            .append("circle")
+            .attr("class", "dot")
+            .attr("id", (d, i) => i)
+            .attr("data-xvalue", (d, i) => vYear[i])
+            .attr("data-yvalue", (d, i) => vTime[i])
+            .attr("cx", (d, i) => xScale(vYear[i]) + cPaddingLeft)
+            .attr("cy", (d, i) => yScale(d) + cPaddingBottom)
+            .attr("r", 10)
+            .attr("doping", (d, i) => {
+              return vDataset[i].Doping != "";
+            })
+            //tooltip handle
+            .on("mouseover", (d, i) => {
+              let event = this.event;
+              let cy = event.y;
+              let cx = event.x;
+              let data = vDataset[i];
+              tooltip
+                .transition()
+                .duration(10)
+                .style("opacity", 0.9)
+                .style("z-index", 1);
+              tooltip
+                .attr("data-year", vYear[i])
+                .html(() => {
+                  let temp =
+                    data.Name +
+                    " - " +
+                    data.Nationality +
+                    "<br>Year: " +
+                    data.Year +
+                    " - Time: " +
+                    data.Time;
+                  return data.Doping != ""
+                    ? temp + "<br><br>" + data.Doping
+                    : temp;
+                })
+                .style("left", cx + 12 + "px")
+                .style("top", () => {
+                  return data.Doping != "" ? cy + 10 + "px" : cy + 20 + "px";
+                });
+            })
+            .on("mouseout", (d) => {
+              tooltip
+                .transition()
+                .duration(500)
+                .style("opacity", 0)
+                .style("z-index", -2);
+            });
+        });
+    </script>
+  </body>
+</html>
